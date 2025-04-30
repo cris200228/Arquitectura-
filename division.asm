@@ -4,113 +4,136 @@
 .DATA
     msg1    DB "Ingrese el dividendo (00-99): $"
     msg2    DB 13,10, "Ingrese el divisor (01-99): $"
-    msgR    DB 13,10, "El resultado de la division es: $"
-    msgErr  DB 13,10, "Error: division por cero no permitida.$"
-    result  DB 2 DUP(?)     ; Para guardar decena y unidad
+    msgR    DB 13,10, "El cociente es: $"
+    msgRes  DB 13,10, "El residuo es: $"
+    msgErr  DB 13,10, "Error: division por cero o entrada invalida.$"
+    newline DB 13,10,"$"
+    
+    dividendo DB ?
+    divisor   DB ?
+    cociente  DB ?
+    residuo   DB ?
 
 .CODE
 MAIN:
     MOV AX, @DATA
     MOV DS, AX
 
-    ; ----------------------------
-    ; Leer primer número (dividendo)
-    ; ----------------------------
+    ; --- Pedir dividendo ---
     LEA DX, msg1
-    MOV AH, 09H
-    INT 21H
+    CALL mostrar_mensaje
+    CALL leer_numero
+    CMP AL, 0FFH      ; Si hay error (AL=0FFH)
+    JE error_input
+    MOV dividendo, AL
 
-    CALL leer_dos_digitos
-    MOV BL, AL              ; Guardar dividendo en BL
-
-    ; ----------------------------
-    ; Leer segundo número (divisor)
-    ; ----------------------------
+    ; --- Pedir divisor ---
     LEA DX, msg2
-    MOV AH, 09H
-    INT 21H
+    CALL mostrar_mensaje
+    CALL leer_numero
+    CMP AL, 0FFH      ; Si hay error (AL=0FFH)
+    JE error_input
+    CMP AL, 0         ; Divisor = 0?
+    JE error_input
+    MOV divisor, AL
 
-    CALL leer_dos_digitos
-    CMP AL, 0
-    JE division_cero        ; Si divisor es cero, error
-    MOV BH, AL              ; Guardar divisor en BH
+    ; --- Realizar división ---
+    MOV AL, dividendo
+    XOR AH, AH        ; Limpia AH (AX = AL)
+    DIV divisor       ; AX / divisor → AL=cociente, AH=residuo
+    MOV cociente, AL
+    MOV residuo, AH
 
-    ; ----------------------------
-    ; Realizar división
-    ; ----------------------------
-    MOV AL, BL              ; AL = dividendo
-    XOR AH, AH              ; Preparar AX para DIV
-    DIV BH                  ; AL = cociente, AH = residuo
-
-    ; ----------------------------
-    ; Mostrar resultado
-    ; ----------------------------
+    ; --- Mostrar resultados ---
     LEA DX, msgR
-    MOV AH, 09H
-    INT 21H
+    CALL mostrar_mensaje
+    MOV AL, cociente
+    CALL imprimir_numero
 
-    ; Si el cociente es mayor o igual a 10, mostramos los dos dígitos.
-    MOV DL, AL
-    CMP DL, 10
-    JGE dos_digitos
+    LEA DX, msgRes
+    CALL mostrar_mensaje
+    MOV AL, residuo
+    CALL imprimir_numero
 
-    ; Si el cociente es menor que 10, solo mostramos un dígito.
-    ADD DL, '0'             ; Convertir a ASCII
-    MOV AH, 02H
-    INT 21H
     JMP fin
 
-dos_digitos:
-    ; Si el cociente es mayor o igual a 10, mostramos los dos dígitos.
-    MOV AH, 0              ; Limpiar AH (porque vamos a usar AL y AH)
-    MOV BL, 10
-    DIV BL                  ; AL = decena, AH = unidad
+error_input:
+    LEA DX, msgErr
+    CALL mostrar_mensaje
 
-    ADD AL, '0'             ; Convertir decena a ASCII
+fin:
+    MOV AH, 4CH
+    INT 21H
+
+; ====== Funciones ======
+
+mostrar_mensaje PROC
+    MOV AH, 09H
+    INT 21H
+    RET
+mostrar_mensaje ENDP
+
+leer_numero PROC
+    ; Retorna en AL el número leído (0-99) o 0FFH si hay error
+
+    ; Leer primer carácter
+    MOV AH, 01H
+    INT 21H
+    CMP AL, 13          ; Enter directamente = error
+    JE invalido
+    CMP AL, '0'
+    JB invalido
+    CMP AL, '9'
+    JA invalido
+    SUB AL, '0'
+    MOV BL, AL          ; BL = primer dígito
+
+    ; Leer siguiente carácter
+    MOV AH, 01H
+    INT 21H
+    CMP AL, 13          ; Si es Enter, solo un dígito
+    JE solo_uno
+    CMP AL, '0'
+    JB invalido
+    CMP AL, '9'
+    JA invalido
+    SUB AL, '0'         ; AL = segundo dígito
+    MOV BH, AL          ; BH = segundo dígito
+    MOV AL, BL
+    MOV BL, 10
+    MUL BL              ; AL = primer_digito * 10
+    ADD AL, BH          ; AL = número final
+    RET
+
+solo_uno:
+    MOV AL, BL          ; Solo un dígito ingresado
+    RET
+
+invalido:
+    MOV AL, 0FFH        ; Valor de error
+    RET
+leer_numero ENDP
+
+imprimir_numero PROC
+    ; Imprime AL (00-99) sin ceros a la izquierda
+    XOR AH, AH
+    MOV BL, 10
+    DIV BL           ; AL = decena, AH = unidad
+
+    CMP AL, 0
+    JE solo_unidad
+    ADD AL, '0'
     MOV DL, AL
     MOV AH, 02H
     INT 21H
 
-    ADD AH, '0'             ; Convertir unidad a ASCII
-    MOV DL, AH
+solo_unidad:
+    MOV AL, AH
+    ADD AL, '0'
+    MOV DL, AL
     MOV AH, 02H
     INT 21H
-
-fin:
-    MOV AH, 4CH
-    INT 21H
-
-; ----------------------------
-; División por cero
-; ----------------------------
-division_cero:
-    LEA DX, msgErr
-    MOV AH, 09H
-    INT 21H
-
-fin:
-    MOV AH, 4CH
-    INT 21H
-
-; --------------------------------------------------
-; Leer dos dígitos del teclado (00 a 99)
-; Devuelve número en AL
-leer_dos_digitos:
-    ; Leer primer dígito (decena)
-    MOV AH, 01H
-    INT 21H
-    SUB AL, '0'
-    MOV AH, AL
-
-    ; Leer segundo dígito (unidad)
-    MOV AH, 01H
-    INT 21H
-    SUB AL, '0'
-
-    ; Calcular número total: (decena * 10) + unidad
-    MOV BL, 10
-    MUL BL         ; AX = decena * 10
-    ADD AL, AH     ; AL = resultado final
     RET
+imprimir_numero ENDP
 
 END MAIN
