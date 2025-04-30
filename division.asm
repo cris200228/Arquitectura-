@@ -40,17 +40,7 @@ MAIN:
     ; ----------------------------
     MOV AL, BL              ; AL = dividendo
     XOR AH, AH              ; Preparar AX para DIV
-    DIV BH                  ; AL = resultado, AH = residuo
-
-    ; Convertir resultado a ASCII
-    XOR AH, AH
-    MOV BL, 10
-    DIV BL                  ; AL = decena, AH = unidad
-
-    MOV result[0], AL
-    MOV result[1], AH
-    ADD result[0], '0'
-    ADD result[1], '0'
+    DIV BH                  ; AL = cociente, AH = residuo
 
     ; ----------------------------
     ; Mostrar resultado
@@ -59,18 +49,36 @@ MAIN:
     MOV AH, 09H
     INT 21H
 
-    MOV DL, result[0]
-    CMP DL, '0'
-    JE solo_unidad
+    ; Si el cociente es mayor o igual a 10, mostramos los dos dígitos.
+    MOV DL, AL
+    CMP DL, 10
+    JGE dos_digitos
+
+    ; Si el cociente es menor que 10, solo mostramos un dígito.
+    ADD DL, '0'             ; Convertir a ASCII
     MOV AH, 02H
     INT 21H
-
-solo_unidad:
-    MOV DL, result[1]
-    MOV AH, 02H
-    INT 21H
-
     JMP fin
+
+dos_digitos:
+    ; Si el cociente es mayor o igual a 10, mostramos los dos dígitos.
+    MOV AH, 0              ; Limpiar AH (porque vamos a usar AL y AH)
+    MOV BL, 10
+    DIV BL                  ; AL = decena, AH = unidad
+
+    ADD AL, '0'             ; Convertir decena a ASCII
+    MOV DL, AL
+    MOV AH, 02H
+    INT 21H
+
+    ADD AH, '0'             ; Convertir unidad a ASCII
+    MOV DL, AH
+    MOV AH, 02H
+    INT 21H
+
+fin:
+    MOV AH, 4CH
+    INT 21H
 
 ; ----------------------------
 ; División por cero
